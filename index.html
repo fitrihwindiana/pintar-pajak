@@ -1,0 +1,1245 @@
+<!DOCTYPE html>
+<html lang="id" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pintar Pajak - NASMOCO Pro Edition</title>
+    <!-- Firebase SDK untuk autentikasi Admin -->
+    <script src="https://www.gstatic.com/firebasejs/12.2.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.2.1/firebase-auth-compat.js"></script>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter Font & FontAwesome Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- SheetJS untuk membaca file Excel/CSV -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        /* Menu khusus User disembunyikan; Admin dapat melihatnya setelah login. */
+        .user-hidden { display: none !important; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 h-full flex flex-col selection:bg-blue-600 selection:text-white overflow-hidden">
+
+    <!-- Role Selector Modal (Tampilan Awal) -->
+    <div id="roleModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-xl w-full p-8 border border-slate-100 transform transition-all">
+            <div class="text-center mb-8">
+                <div class="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-tr from-blue-600 to-indigo-600 text-white rounded-2xl shadow-lg shadow-blue-500/30 text-2xl mb-4">
+                    <i class="fa-solid fa-car-side"></i>
+                </div>
+                <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Pintar Pajak</h1>
+                <p class="text-sm text-slate-500 mt-1">NASMOCO Professional Tax Information System</p>
+            </div>
+
+            <div class="space-y-4">
+                <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">
+                    Silakan pilih akses masuk aplikasi:
+                </div>
+
+                <!-- Option User -->
+                <button onclick="selectRole('user')" class="w-full flex items-center justify-between p-4 bg-white hover:bg-blue-50/50 border border-slate-200 hover:border-blue-300 rounded-xl transition group text-left shadow-sm cursor-pointer">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-lg group-hover:scale-110 transition">
+                            <i class="fa-solid fa-eye"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition">User (Viewer)</h3>
+                            <p class="text-xs text-slate-500">Melihat Dashboard utama.</p>
+                        </div>
+                    </div>
+                    <i class="fa-solid fa-arrow-right text-slate-400 group-hover:text-blue-600 transition transform group-hover:translate-x-1"></i>
+                </button>
+
+                <!-- Option Admin -->
+                <button onclick="openAdminLoginModal()" class="w-full flex items-center justify-between p-4 bg-white hover:bg-slate-900/5 border border-slate-200 hover:border-slate-800 rounded-xl transition group text-left shadow-sm cursor-pointer">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-xl bg-slate-900 text-white flex items-center justify-center text-lg group-hover:scale-110 transition">
+                            <i class="fa-solid fa-user-shield"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-900 transition">Admin (Editor & Viewer)</h3>
+                            <p class="text-xs text-slate-500">Kelola data, tambah, edit, hapus, import Excel, dan export data.</p>
+                        </div>
+                    </div>
+                    <i class="fa-solid fa-arrow-right text-slate-400 group-hover:text-slate-900 transition transform group-hover:translate-x-1"></i>
+                </button>
+            </div>
+
+            <div class="mt-8 text-center text-xs text-slate-400">
+                &copy; 2026 NASMOCO GROUP. All rights reserved.
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Login Modal (Step 1: Email & Password) -->
+    <div id="adminLoginModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-100">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center">
+                        <i class="fa-solid fa-lock"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900">Login Administrator</h3>
+                        <p class="text-[11px] text-slate-500">Login menggunakan Firebase Authentication</p>
+                    </div>
+                </div>
+                <button onclick="closeAdminLoginModal()" class="text-slate-400 hover:text-slate-600 cursor-pointer"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+
+            <form id="loginForm" onsubmit="handleLoginSubmit(event)" class="space-y-3.5">
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Email Administrator</label>
+                    <input type="email" id="adminEmail" required placeholder="admin.tax@nasmoco.co.id"
+                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 transition">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Password</label>
+                    <input type="password" id="adminPassword" required placeholder="••••••••"
+                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-blue-600 transition">
+                </div>
+                <div class="pt-2 flex justify-end gap-2">
+                    <button type="button" onclick="closeAdminLoginModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition cursor-pointer">Batal</button>
+                    <button type="submit" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-600/30 transition cursor-pointer">Login Admin</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Firebase Authentication aktif untuk login Admin dengan Email + Password -->
+    <div id="authLoadingModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[60] flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 border border-slate-100 text-center">
+            <div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-xl">
+                <i class="fa-solid fa-spinner fa-spin"></i>
+            </div>
+            <h3 class="text-sm font-bold text-slate-900">Memverifikasi Admin</h3>
+            <p class="text-xs text-slate-500 mt-1">Menghubungkan ke Firebase Authentication...</p>
+        </div>
+    </div>
+
+    <!-- Main App Layout (Hidden until role selected) -->
+    <div id="appContainer" class="flex h-full w-full overflow-hidden hidden">
+
+        <!-- Sidebar Navigation -->
+        <aside class="w-64 bg-slate-900 text-slate-300 flex flex-col justify-between shrink-0 border-r border-slate-800">
+            <div>
+                <!-- Brand Header -->
+                <div class="p-4 border-b border-slate-800 flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-black shadow-md">
+                        <i class="fa-solid fa-car-side"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-sm font-bold text-white leading-tight">Pintar Pajak</h2>
+                        <p class="text-[11px] text-slate-400">PT New Ratna Motor</p>
+                    </div>
+                </div>
+
+                <!-- Navigation Links -->
+                <nav class="p-3 space-y-1 text-xs font-medium" id="sidebarNav">
+                    <a href="#" onclick="switchTab('dashboard')" id="nav-dashboard" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-600/30 transition">
+                        <i class="fa-solid fa-house w-4"></i> Dashboard
+                    </a>
+                    <a href="#" onclick="checkAdminAction(() => switchTab('data'))" id="nav-data" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white transition admin-only">
+                        <i class="fa-solid fa-database w-4"></i> Data Pajak
+                    </a>
+                    <a href="#" onclick="checkAdminAction(() => switchTab('form'))" id="nav-form" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white transition admin-only">
+                        <i class="fa-solid fa-plus w-4"></i> Tambah Data
+                    </a>
+                    <a href="#" onclick="checkAdminAction(() => triggerImportModal())" id="nav-import" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white transition admin-only">
+                        <i class="fa-solid fa-file-import w-4"></i> Import Excel
+                    </a>
+                    <a href="#" onclick="exportExcel()" id="nav-export" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white transition">
+                        <i class="fa-solid fa-file-excel w-4"></i> Export Excel
+                    </a>
+                    <a href="#" onclick="openSettingsModal()" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white transition admin-only">
+                        <i class="fa-solid fa-gear w-4"></i> Pengaturan
+                    </a>
+                </nav>
+            </div>
+
+            <!-- Sidebar Footer Info -->
+            <div class="p-4 border-t border-slate-800 bg-slate-950/50">
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 flex items-start gap-3">
+                    <div class="text-blue-400 mt-0.5"><i class="fa-solid fa-circle-info"></i></div>
+                    <div>
+                        <h4 class="text-[11px] font-bold text-white">Mudah • Cepat • Akurat</h4>
+                        <p class="text-[10px] text-slate-400 mt-0.5">Sumber informasi pajak untuk pemotongan yang tepat.</p>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <div class="flex-grow flex flex-col min-w-0 overflow-hidden">
+            
+            <!-- Top Header Navbar -->
+            <header class="bg-white border-b border-slate-200 px-6 py-3.5 flex items-center justify-between shrink-0 shadow-sm">
+                <div>
+                    <h1 id="pageTitle" class="text-lg font-bold text-slate-900">Dashboard</h1>
+                    <p id="pageSubtitle" class="text-xs text-slate-500">Selamat datang di Pintar Pajak. Temukan informasi tarif dan ketentuan pajak vendor.</p>
+                </div>
+
+                <div class="flex items-center gap-4">
+                    <span id="roleBadge" class="px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-xs font-semibold border border-slate-200">
+                        Mode: User (Viewer)
+                    </span>
+                    <button onclick="openNotificationModal()" class="w-9 h-9 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 transition relative cursor-pointer">
+                        <i class="fa-regular fa-bell text-sm"></i>
+                        <span class="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>
+                    </button>
+                    <div class="flex items-center gap-3 pl-2 border-l border-slate-200">
+                        <div class="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold flex items-center justify-center text-xs shadow">
+                            <span id="userInitial">FW</span>
+                        </div>
+                        <div class="hidden sm:block text-left">
+                            <h4 id="userNameDisplay" class="text-xs font-bold text-slate-800">Fitrih Windiana</h4>
+                            <p id="userRoleDisplay" class="text-[10px] text-slate-500">Staff Accounting</p>
+                        </div>
+                        <button onclick="logoutRole()" title="Keluar / Ganti Mode" class="ml-2 text-slate-400 hover:text-red-600 transition cursor-pointer">
+                            <i class="fa-solid fa-right-from-bracket"></i>
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Scrollable Page Views -->
+            <main class="flex-grow overflow-y-auto p-6 space-y-6">
+
+                <!-- VIEW 1: Dashboard Overview (User & Admin Landing View) -->
+                <div id="view-dashboard" class="space-y-6">
+                    <!-- Metric Cards Grid -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <!-- Card 1 -->
+                        <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-lg">
+                                    <i class="fa-solid fa-users"></i>
+                                </div>
+                                <span class="text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full"><i class="fa-solid fa-arrow-trend-up"></i> Aktif</span>
+                            </div>
+                            <h3 class="text-2xl font-black text-slate-900" id="statTotalData">48</h3>
+                            <p class="text-xs text-slate-500 mt-1">Data vendor tersimpan</p>
+                        </div>
+                        <!-- Card 2 -->
+                        <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg">
+                                    <i class="fa-solid fa-building"></i>
+                                </div>
+                                <span class="text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">Vendor</span>
+                            </div>
+                            <h3 class="text-2xl font-black text-slate-900" id="statTotalVendor">36</h3>
+                            <p class="text-xs text-slate-500 mt-1">Nama vendor terdaftar</p>
+                        </div>
+                        <!-- Card 3 -->
+                        <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center text-lg">
+                                    <i class="fa-solid fa-percent"></i>
+                                </div>
+                                <span class="text-xs font-bold text-purple-600 bg-purple-50 px-2.5 py-1 rounded-full">Tarif</span>
+                            </div>
+                            <h3 class="text-2xl font-black text-slate-900" id="statTotalTarif">5</h3>
+                            <p class="text-xs text-slate-500 mt-1">Jenis tarif pajak berbeda</p>
+                        </div>
+                        <!-- Card 4 -->
+                        <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-lg">
+                                    <i class="fa-solid fa-briefcase"></i>
+                                </div>
+                                <span class="text-xs font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full">Kategori</span>
+                            </div>
+                            <h3 class="text-2xl font-black text-slate-900" id="statTotalPekerjaan">8</h3>
+                            <p class="text-xs text-slate-500 mt-1">Kategori pekerjaan</p>
+                        </div>
+                    </div>
+
+                    <!-- Search & Filter Bar Section -->
+                    <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                                <i class="fa-solid fa-magnifying-glass text-blue-600"></i> Pencarian Cepat & Data Terdaftar
+                            </h3>
+                            <span class="text-xs text-slate-500">Ketik kata kunci untuk memfilter tabel di bawah</span>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                            <div class="md:col-span-2 relative">
+                                <input type="text" id="searchInput" oninput="filterDashboardTable()" placeholder="Cari berdasarkan nama vendor, NPWP, tarif pajak, jenis pekerjaan..."
+                                    class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-4 pr-10 py-2.5 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-600 transition">
+                                <span class="absolute right-3.5 top-3 text-slate-400 text-xs"><i class="fa-solid fa-search"></i></span>
+                            </div>
+                            <div>
+                                <select id="filterTarif" onchange="filterDashboardTable()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-600 transition">
+                                    <option value="">Semua Tarif Pajak</option>
+                                    <option value="1.5%">1.5%</option>
+                                    <option value="2%">2%</option>
+                                    <option value="3%">3%</option>
+                                    <option value="4%">4%</option>
+                                    <option value="10%">10%</option>
+                                </select>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button onclick="filterDashboardTable()" class="flex-grow bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer">Cari</button>
+                                <button onclick="resetSearch()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-2.5 rounded-xl text-xs font-medium transition cursor-pointer">Reset</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Live Search Results Table on Dashboard -->
+                    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                        <div class="p-4 border-b border-slate-200 bg-slate-50/50 flex items-center justify-between">
+                            <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider">Hasil Pencarian & Data Terdaftar</h4>
+                            <span class="text-xs text-slate-500">Total ditemukan: <strong id="dashTableCount" class="text-slate-900">0</strong> data</span>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead class="bg-slate-100 text-slate-600 uppercase text-[10px] font-bold tracking-wider border-b border-slate-200">
+                                    <tr>
+                                        <th class="p-3">Nama Vendor</th>
+                                        <th class="p-3">NPWP</th>
+                                        <th class="p-3">Tarif Pajak</th>
+                                        <th class="p-3">Jenis Pajak</th>
+                                        <th class="p-3">Jenis Pekerjaan</th>
+                                        <th class="p-3 text-center w-24">Rujukan</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="dashboardTableBody" class="divide-y divide-slate-100 text-xs text-slate-700">
+                                    <!-- Injected via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VIEW 2: Data Table Section (Full Admin/User Data view) -->
+                <div id="view-data" class="bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col overflow-hidden hidden">
+                    <!-- Toolbar inside table -->
+                    <div class="p-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 bg-slate-50/50">
+                        <div class="flex items-center gap-2">
+                            <button onclick="checkAdminAction(() => switchTab('form'))" class="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-sm transition flex items-center gap-2 cursor-pointer admin-action-btn">
+                                <i class="fa-solid fa-plus"></i> Tambah Data
+                            </button>
+                            <button onclick="checkAdminAction(() => deleteSelected())" class="bg-white hover:bg-red-50 text-red-600 border border-slate-200 px-3.5 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-2 cursor-pointer shadow-sm admin-action-btn">
+                                <i class="fa-solid fa-trash"></i> Hapus Terpilih
+                            </button>
+                        </div>
+                        <div class="flex items-center gap-4 text-xs">
+                            <span class="text-slate-500">Jumlah Data: <strong id="totalCount" class="text-slate-900 font-bold">0</strong></span>
+                            <div class="flex items-center gap-2">
+                                <span class="text-slate-500">Baris:</span>
+                                <select id="rowsPerPage" onchange="changeRowsPerPage()" class="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs text-slate-800 focus:outline-none">
+                                    <option value="10">10</option>
+                                    <option value="25">25</option>
+                                    <option value="50">50</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Table Wrapper -->
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead class="bg-slate-100 text-slate-600 uppercase text-[10px] font-bold tracking-wider border-b border-slate-200">
+                                <tr>
+                                    <th class="p-3 text-center w-12 admin-col">
+                                        <input type="checkbox" id="selectAll" onclick="toggleSelectAll(this)" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer">
+                                    </th>
+                                    <th class="p-3">Nama Vendor</th>
+                                    <th class="p-3">NPWP</th>
+                                    <th class="p-3">Tarif Pajak</th>
+                                    <th class="p-3">Jenis Pajak</th>
+                                    <th class="p-3">Jenis Pekerjaan</th>
+                                    <th class="p-3 text-center w-24">Rujukan</th>
+                                    <th class="p-3 text-center w-32">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tableBody" class="divide-y divide-slate-100 text-xs text-slate-700">
+                                <!-- Dynamic rows injected here -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Empty state -->
+                    <div id="emptyState" class="hidden flex flex-col items-center justify-center py-16 text-slate-400">
+                        <i class="fa-solid fa-folder-open text-4xl mb-2 text-slate-300"></i>
+                        <p class="text-xs font-medium">Belum ada data pajak atau data pencarian tidak ditemukan.</p>
+                    </div>
+
+                    <!-- Pagination Footer -->
+                    <div class="p-4 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50 text-xs text-slate-500">
+                        <span id="paginationInfo">Menampilkan 1 - 8 dari 48 data</span>
+                        <div class="flex items-center gap-1.5" id="paginationControls">
+                            <!-- Dynamic pagination buttons -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VIEW 3: Tambah / Edit Form Section (Admin Only) -->
+                <div id="view-form" class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 hidden">
+                    <div class="flex items-center justify-between pb-4 mb-6 border-b border-slate-100">
+                        <div>
+                            <h3 id="formSectionTitle" class="text-sm font-bold text-slate-900">Form Input Data Pajak Vendor</h3>
+                            <p class="text-xs text-slate-500">Lengkapi formulir di bawah ini dengan informasi perpajakan yang valid.</p>
+                        </div>
+                        <button onclick="switchTab('dashboard')" class="text-slate-400 hover:text-slate-600 text-xs font-semibold cursor-pointer"><i class="fa-solid fa-xmark text-base"></i> Batal</button>
+                    </div>
+
+                    <form id="taxForm" onsubmit="handleFormSubmit(event)" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="md:col-span-2">
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Nama Vendor <span class="text-red-500">*</span></label>
+                            <input type="text" id="inputNama" required maxlength="100" pattern="[A-Za-z0-9À-ÿ ]+"
+                                title="Nama vendor hanya boleh berisi huruf, angka, dan spasi."
+                                placeholder="Contoh: PT GLOBAL CARFIX INDONESIA 123"
+                                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-600 transition">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">NPWP <span class="text-red-500">*</span></label>
+                            <input type="text" id="inputNpwp" required maxlength="21" minlength="21" inputmode="numeric" autocomplete="off"
+                                title="Masukkan 16 angka NPWP. Format akan otomatis menjadi 000.000.000.0-000.000." placeholder="Contoh: 000.000.000.0-000.000"
+                                oninput="this.value = formatNpwp(this.value)"
+                                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-600 transition">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Tarif Pajak <span class="text-red-500">*</span></label>
+                            <div class="relative">
+                                <input type="number" id="inputTarif" required min="0" max="100" step="0.01" placeholder="Contoh: 2"
+                                    class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-3.5 pr-9 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-600 transition">
+                                <span class="absolute right-3 top-2.5 text-xs font-bold text-slate-500">%</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Jenis Pajak <span class="text-red-500">*</span></label>
+                            <input type="text" id="inputJenisPajak" required maxlength="100" placeholder="Contoh: PPh 23 / PPN"
+                                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-600 transition">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Jenis Pekerjaan <span class="text-red-500">*</span></label>
+                            <input type="text" id="inputPekerjaan" required maxlength="100" placeholder="Contoh: Jasa Servis / Perawatan"
+                                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-600 transition">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Rujukan / Link <span class="text-red-500">*</span></label>
+                            <input type="url" id="inputRujukan" required placeholder="Contoh: https://www.pajak.go.id/"
+                                title="Masukkan link rujukan yang valid."
+                                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-600 transition">
+                        </div>
+                        <div class="md:col-span-2 pt-4 flex justify-end gap-3 border-t border-slate-100">
+                            <button type="button" onclick="switchTab('dashboard')" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition cursor-pointer">Batal</button>
+                            <button type="submit" id="btnSubmitForm" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-600/30 transition cursor-pointer">Simpan Data</button>
+                        </div>
+                    </form>
+                </div>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Detail Modal -->
+    <div id="detailModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 border border-slate-100">
+            <div class="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
+                <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <i class="fa-solid fa-circle-info text-blue-600"></i> Detail Informasi Pajak Vendor
+                </h3>
+                <button onclick="closeDetailModal()" class="text-slate-400 hover:text-slate-600 cursor-pointer"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div id="detailContent" class="space-y-3 text-xs text-slate-700">
+                <!-- Injected via JS -->
+            </div>
+            <div class="mt-6 flex justify-end">
+                <button onclick="closeDetailModal()" class="px-5 py-2 bg-slate-900 text-white rounded-xl text-xs font-semibold hover:bg-slate-800 transition cursor-pointer">Tutup</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Excel Modal -->
+    <div id="importModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-100">
+            <div class="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
+                <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <i class="fa-solid fa-file-import text-emerald-600"></i> Import Data Excel / CSV
+                </h3>
+                <button onclick="closeImportModal()" class="text-slate-400 hover:text-slate-600 cursor-pointer"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div class="space-y-4 text-xs text-slate-600">
+                <p>Unggah file template CSV atau Excel rekapitulasi vendor pajak NASMOCO.</p>
+                <input type="file" id="importFile" accept=".csv,.xlsx,.xls" class="hidden" onchange="handleImportFileSelect(event)">
+                <label for="importFile" class="block border-2 border-dashed border-slate-200 rounded-2xl p-6 text-center bg-slate-50 hover:bg-slate-100/50 transition cursor-pointer">
+                    <i class="fa-solid fa-cloud-arrow-up text-3xl text-slate-400 mb-2"></i>
+                    <p id="importFileName" class="font-medium text-slate-700">Klik untuk pilih file</p>
+                    <p class="text-[10px] text-slate-400 mt-1">Format didukung: .csv, .xlsx, .xls</p>
+                </label>
+                <div class="bg-blue-50 border border-blue-100 rounded-xl p-3 text-[10px] text-blue-700">
+                    <strong>Kolom yang dibaca:</strong> Nama Vendor, NPWP, Tarif Pajak, Jenis Pajak, Jenis Pekerjaan, Rujukan (URL).
+                </div>
+            </div>
+            <div class="mt-6 flex justify-end gap-2">
+                <button onclick="closeImportModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition cursor-pointer">Batal</button>
+                <button onclick="processImportFile()" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-600/30 transition cursor-pointer">Proses Import</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 bg-slate-900 border border-slate-800 text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3">
+        <span id="toastIcon" class="text-emerald-400 text-base"><i class="fa-solid fa-circle-check"></i></span>
+        <div>
+            <h4 id="toastTitle" class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Informasi</h4>
+            <p id="toastMessage" class="text-xs font-medium text-slate-200">Aksi berhasil dilakukan</p>
+        </div>
+    </div>
+
+    <script>
+        // --- Firebase Authentication ---
+        // Konfigurasi berasal dari Firebase Console > Project settings > Your apps > Web app.
+        const firebaseConfig = {
+            apiKey: "AIzaSyAr8qwwH3WliWHcUmSar_8CDKDr73RB4",
+            authDomain: "pintar-pajak-68996.firebaseapp.com",
+            projectId: "pintar-pajak-68996",
+            storageBucket: "pintar-pajak-68996.firebasestorage.app",
+            messagingSenderId: "334796796066",
+            appId: "1:334796796066:web:a62f9432bce9e8d312a7fb",
+            measurementId: "G-B246DVJCBD"
+        };
+
+        let firebaseApp = null;
+        let firebaseAuth = null;
+        let firebaseReady = false;
+
+        try {
+            firebaseApp = firebase.initializeApp(firebaseConfig);
+            firebaseAuth = firebase.auth();
+            firebaseReady = true;
+        } catch (error) {
+            console.error('Firebase initialization error:', error);
+        }
+
+        // Initial Database Mock Data (Nasatya & NASMOCO Tax Standard)
+        let taxData = [
+            { id: 1, namaVendor: "PT Astra Mitra", npwp: "0123456789001000", tarifPajak: "2%", jenisPajak: "PPh 23", jenisPekerjaan: "Jasa", rujukan: "https://www.pajak.go.id/" },
+            { id: 2, namaVendor: "CV Sinar Abadi", npwp: "0234567890002000", tarifPajak: "1.5%", jenisPajak: "PPh 23", jenisPekerjaan: "Sewa", rujukan: "https://www.pajak.go.id/" },
+            { id: 3, namaVendor: "PT Global Solusi", npwp: "0345678900003000", tarifPajak: "2%", jenisPajak: "PPh 23", jenisPekerjaan: "Jasa", rujukan: "https://www.pajak.go.id/" },
+            { id: 4, namaVendor: "CV Maju Bersama", npwp: "0456789010004000", tarifPajak: "4%", jenisPajak: "PPh 23", jenisPekerjaan: "Jasa", rujukan: "https://www.pajak.go.id/" },
+            { id: 5, namaVendor: "PT Sejahtera Abadi", npwp: "0567890120005000", tarifPajak: "10%", jenisPajak: "PPh 23", jenisPekerjaan: "Barang", rujukan: "https://www.pajak.go.id/" },
+            { id: 6, namaVendor: "CV Prima Jaya", npwp: "0678901230006000", tarifPajak: "1.5%", jenisPajak: "PPh 23", jenisPekerjaan: "Sewa", rujukan: "https://www.pajak.go.id/" },
+            { id: 7, namaVendor: "PT Teknologi Maju", npwp: "0789012340007000", tarifPajak: "2%", jenisPajak: "PPh 23", jenisPekerjaan: "Jasa", rujukan: "https://www.pajak.go.id/" },
+            { id: 8, namaVendor: "CV Karya Mandiri", npwp: "0890123450008000", tarifPajak: "3%", jenisPajak: "PPh 23", jenisPekerjaan: "Jasa", rujukan: "https://www.pajak.go.id/" }
+        ];
+
+        let currentUserRole = null; // 'user' or 'admin'
+        let selectedIds = new Set();
+        let editingId = null;
+        let currentPage = 1;
+        let rowsPerPage = 10;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            loadSavedData();
+            updateDashboardMetrics();
+            renderDashboardTable(taxData);
+        });
+
+        function loadSavedData() {
+            const saved = sessionStorage.getItem('nasmoco_tax_pro_data');
+            if (saved) {
+                try { taxData = JSON.parse(saved); } catch(e) {}
+            }
+        }
+
+        function saveToStorage() {
+            sessionStorage.setItem('nasmoco_tax_pro_data', JSON.stringify(taxData));
+        }
+
+        // --- Role & Navigation Control ---
+        function selectRole(role) {
+            currentUserRole = role;
+            document.getElementById('roleModal').classList.add('hidden');
+            document.getElementById('appContainer').classList.remove('hidden');
+
+            const badge = document.getElementById('roleBadge');
+            const adminElements = document.querySelectorAll('.admin-only');
+            const userHiddenElements = document.querySelectorAll('.user-hidden');
+
+            if (role === 'admin') {
+                badge.innerText = "Mode: Admin (Editor & Viewer)";
+                badge.className = "px-3 py-1 bg-slate-900 text-white rounded-full text-xs font-semibold border border-slate-800 shadow-sm";
+                const adminUser = firebaseReady && firebaseAuth ? firebaseAuth.currentUser : null;
+                const adminEmail = adminUser && adminUser.email ? adminUser.email : 'Administrator';
+                document.getElementById('userNameDisplay').innerText = adminEmail;
+                document.getElementById('userRoleDisplay').innerText = "Administrator / Firebase Auth";
+                document.getElementById('userInitial').innerText = "AD";
+
+                // Admin: semua menu tetap ditampilkan seperti semula.
+                adminElements.forEach(el => {
+                    el.classList.remove('hidden');
+                    el.style.display = '';
+                });
+                userHiddenElements.forEach(el => {
+                    el.classList.remove('hidden');
+                    el.style.display = '';
+                });
+
+                // Pastikan menu Data Pajak dan Tambah Data kembali tampil di mode Admin.
+                document.getElementById('nav-data').classList.remove('hidden');
+                document.getElementById('nav-form').classList.remove('hidden');
+                document.getElementById('nav-data').style.display = '';
+                document.getElementById('nav-form').style.display = '';
+            } else {
+                badge.innerText = "Mode: User (Viewer)";
+                badge.className = "px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-semibold border border-blue-200";
+                document.getElementById('userNameDisplay').innerText = "Fitrih Windiana";
+                document.getElementById('userRoleDisplay').innerText = "Staff Accounting";
+                document.getElementById('userInitial').innerText = "FW";
+
+                // User: hanya Dashboard dan Export Excel.
+                adminElements.forEach(el => el.classList.add('hidden'));
+                userHiddenElements.forEach(el => {
+                    el.classList.add('hidden');
+                    el.style.display = 'none';
+                });
+
+                // Pastikan Data Pajak dan Tambah Data tidak tampil pada mode User.
+                document.getElementById('nav-data').classList.add('hidden');
+                document.getElementById('nav-form').classList.add('hidden');
+                document.getElementById('nav-data').style.display = 'none';
+                document.getElementById('nav-form').style.display = 'none';
+            }
+            switchTab('dashboard');
+        }
+
+        async function logoutRole() {
+            try {
+                if (firebaseReady && firebaseAuth && firebaseAuth.currentUser) {
+                    await firebaseAuth.signOut();
+                }
+            } catch (error) {
+                console.error('Firebase sign out error:', error);
+            }
+            currentUserRole = null;
+            document.getElementById('appContainer').classList.add('hidden');
+            document.getElementById('roleModal').classList.remove('hidden');
+            document.getElementById('adminEmail').value = '';
+            document.getElementById('adminPassword').value = '';
+        }
+
+        function openAdminLoginModal() {
+            document.getElementById('adminLoginModal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('adminEmail').focus(), 100);
+        }
+
+        function closeAdminLoginModal() {
+            document.getElementById('adminLoginModal').classList.add('hidden');
+        }
+
+        function showAuthLoading(show) {
+            document.getElementById('authLoadingModal').classList.toggle('hidden', !show);
+        }
+
+        function getFirebaseAuthMessage(error) {
+            const code = error && error.code ? error.code : '';
+            switch (code) {
+                case 'auth/invalid-email':
+                    return 'Format email tidak valid.';
+                case 'auth/user-not-found':
+                case 'auth/wrong-password':
+                case 'auth/invalid-credential':
+                    return 'Email atau password Admin salah.';
+                case 'auth/user-disabled':
+                    return 'Akun Admin dinonaktifkan di Firebase.';
+                case 'auth/too-many-requests':
+                    return 'Terlalu banyak percobaan login. Coba lagi beberapa saat.';
+                case 'auth/network-request-failed':
+                    return 'Koneksi internet bermasalah. Periksa koneksi lalu coba lagi.';
+                default:
+                    return 'Login gagal. Periksa email, password, dan koneksi internet.';
+            }
+        }
+
+        async function handleLoginSubmit(e) {
+            e.preventDefault();
+
+            if (!firebaseReady || !firebaseAuth) {
+                showToast('Firebase Gagal', 'Firebase Authentication belum siap. Refresh halaman dan coba lagi.', 'amber');
+                return;
+            }
+
+            const email = document.getElementById('adminEmail').value.trim();
+            const password = document.getElementById('adminPassword').value;
+            const submitButton = document.querySelector('#loginForm button[type="submit"]');
+
+            if (!email || !password) {
+                showToast('Validasi Gagal', 'Email dan password wajib diisi.', 'amber');
+                return;
+            }
+
+            const originalText = submitButton.innerText;
+            submitButton.disabled = true;
+            submitButton.innerText = 'Memverifikasi...';
+            showAuthLoading(true);
+
+            try {
+                const credential = await firebaseAuth.signInWithEmailAndPassword(email, password);
+                const user = credential.user;
+
+                closeAdminLoginModal();
+                document.getElementById('adminEmail').value = '';
+                document.getElementById('adminPassword').value = '';
+                selectRole('admin');
+                showToast('Login Sukses', `Selamat datang, ${user.email}. Anda masuk sebagai Admin.`);
+            } catch (error) {
+                console.error('Firebase login error:', error);
+                showToast('Login Gagal', getFirebaseAuthMessage(error), 'amber');
+            } finally {
+                showAuthLoading(false);
+                submitButton.disabled = false;
+                submitButton.innerText = originalText;
+            }
+        }
+
+        function checkAdminAction(callback) {
+            if (currentUserRole !== 'admin') {
+                showToast('Akses Dibatasi', 'Fitur ini hanya dapat diakses oleh akun Admin (Editor).', 'amber');
+                return;
+            }
+            callback();
+        }
+
+        // --- Tab Switcher ---
+        function switchTab(tabName) {
+            // User hanya boleh membuka Dashboard.
+            // Admin tetap dapat membuka semua tab seperti semula.
+            if (currentUserRole === 'user' && (tabName === 'data' || tabName === 'form')) {
+                showToast('Akses Dibatasi', 'Fitur Data Pajak dan Tambah Data hanya tersedia pada mode Admin.', 'amber');
+                return;
+            }
+
+            // Hide all views
+            document.getElementById('view-dashboard').classList.add('hidden');
+            document.getElementById('view-data').classList.add('hidden');
+            document.getElementById('view-form').classList.add('hidden');
+
+            // Reset nav styles tanpa menghapus class admin-only/hidden.
+            ['dashboard', 'data', 'form'].forEach(t => {
+                const el = document.getElementById(`nav-${t}`);
+                if (el) {
+                    el.classList.remove('bg-blue-600', 'text-white', 'shadow-lg', 'shadow-blue-600/30');
+                    el.classList.add('hover:bg-slate-800', 'text-slate-300', 'hover:text-white', 'transition');
+                }
+            });
+
+            if (tabName === 'dashboard') {
+                document.getElementById('view-dashboard').classList.remove('hidden');
+                document.getElementById('nav-dashboard').classList.add('bg-blue-600', 'text-white', 'shadow-lg', 'shadow-blue-600/30');
+                document.getElementById('nav-dashboard').classList.remove('text-slate-300');
+                document.getElementById('pageTitle').innerText = "Dashboard";
+                document.getElementById('pageSubtitle').innerText = "Selamat datang di Pintar Pajak. Temukan informasi tarif dan ketentuan pajak vendor.";
+                updateDashboardMetrics();
+                renderDashboardTable(taxData);
+            } else if (tabName === 'data') {
+                document.getElementById('view-data').classList.remove('hidden');
+                document.getElementById('nav-data').classList.add('bg-blue-600', 'text-white', 'shadow-lg', 'shadow-blue-600/30');
+                document.getElementById('nav-data').classList.remove('text-slate-300');
+                document.getElementById('pageTitle').innerText = "Data Pajak Vendor";
+                document.getElementById('pageSubtitle').innerText = "Daftar lengkap database referensi perpajakan vendor NASMOCO.";
+                
+                // Hide checkboxes for non-admin users
+                const adminCols = document.querySelectorAll('.admin-col');
+                const adminActionBtns = document.querySelectorAll('.admin-action-btn');
+                if (currentUserRole !== 'admin') {
+                    adminCols.forEach(el => el.classList.add('hidden'));
+                    adminActionBtns.forEach(el => el.classList.add('hidden'));
+                } else {
+                    adminCols.forEach(el => el.classList.remove('hidden'));
+                    adminActionBtns.forEach(el => el.classList.remove('hidden'));
+                }
+                renderTable(taxData);
+            } else if (tabName === 'form') {
+                document.getElementById('view-form').classList.remove('hidden');
+                document.getElementById('nav-form').classList.add('bg-blue-600', 'text-white', 'shadow-lg', 'shadow-blue-600/30');
+                document.getElementById('nav-form').classList.remove('text-slate-300');
+                document.getElementById('pageTitle').innerText = editingId ? "Edit Data Pajak" : "Tambah Data Pajak";
+                document.getElementById('pageSubtitle').innerText = "Formulir pengelolaan master data perpajakan.";
+            }
+        }
+
+        // --- Dashboard Metrics & Live Search Table ---
+        function updateDashboardMetrics() {
+            document.getElementById('statTotalData').innerText = taxData.length;
+            const uniqueVendors = new Set(taxData.map(d => d.namaVendor)).size;
+            document.getElementById('statTotalVendor').innerText = uniqueVendors;
+            const uniqueTarif = new Set(taxData.map(d => d.tarifPajak)).size;
+            document.getElementById('statTotalTarif').innerText = uniqueTarif;
+            const uniquePekerjaan = new Set(taxData.map(d => d.jenisPekerjaan)).size;
+            document.getElementById('statTotalPekerjaan').innerText = uniquePekerjaan;
+        }
+
+        function renderDashboardTable(dataArray) {
+            const tbody = document.getElementById('dashboardTableBody');
+            document.getElementById('dashTableCount').innerText = dataArray.length;
+            tbody.innerHTML = '';
+            if (dataArray.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400">Tidak ada data yang cocok dengan pencarian Anda.</td></tr>`;
+                return;
+            }
+            dataArray.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-blue-50/50 transition";
+                const referenceUrl = getSafeUrl(item.rujukan);
+                const referenceHtml = referenceUrl
+                    ? `<a href="${escapeHtml(referenceUrl)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center w-8 h-8 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition shadow-sm cursor-pointer" title="Buka rujukan"><i class="fa-solid fa-eye"></i></a>`
+                    : `<span class="inline-flex items-center justify-center w-8 h-8 bg-slate-200 text-slate-400 rounded-lg" title="Rujukan belum tersedia"><i class="fa-solid fa-eye-slash"></i></span>`;
+                tr.innerHTML = `
+                    <td class="p-3 font-semibold text-slate-900">${escapeHtml(item.namaVendor || '')}</td>
+                    <td class="p-3 text-slate-600 font-mono">${escapeHtml(formatNpwp(item.npwp || ''))}</td>
+                    <td class="p-3 font-bold text-emerald-600">${escapeHtml(item.tarifPajak || '')}</td>
+                    <td class="p-3 text-slate-700">${escapeHtml(item.jenisPajak || '')}</td>
+                    <td class="p-3 text-slate-700">${escapeHtml(item.jenisPekerjaan || '')}</td>
+                    <td class="p-3 text-center">${referenceHtml}</td>`;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function filterDashboardTable() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const selectedTarif = document.getElementById('filterTarif').value;
+            const filtered = taxData.filter(item => {
+                const matchesQuery =
+                    String(item.namaVendor || '').toLowerCase().includes(query) ||
+                    formatNpwp(item.npwp || '').toLowerCase().includes(query) || String(item.npwp || '').toLowerCase().includes(query.replace(/\D/g, '')) ||
+                    String(item.jenisPajak || '').toLowerCase().includes(query) ||
+                    String(item.jenisPekerjaan || '').toLowerCase().includes(query) ||
+                    String(item.rujukan || '').toLowerCase().includes(query);
+                const matchesTarif = selectedTarif ? item.tarifPajak === selectedTarif : true;
+                return matchesQuery && matchesTarif;
+            });
+            renderDashboardTable(filtered);
+        }
+
+        // --- Table & Pagination Rendering for Data View ---
+        function renderTable(dataArray) {
+            const tbody = document.getElementById('tableBody');
+            const emptyState = document.getElementById('emptyState');
+            const totalCount = document.getElementById('totalCount');
+            tbody.innerHTML = '';
+            totalCount.innerText = dataArray.length;
+            if (dataArray.length === 0) {
+                emptyState.classList.remove('hidden');
+                document.getElementById('paginationInfo').innerText = "Menampilkan 0 data";
+                document.getElementById('paginationControls').innerHTML = "";
+                return;
+            }
+            emptyState.classList.add('hidden');
+            const startIndex = (currentPage - 1) * rowsPerPage;
+            const endIndex = Math.min(startIndex + rowsPerPage, dataArray.length);
+            const paginatedItems = dataArray.slice(startIndex, endIndex);
+            paginatedItems.forEach((item) => {
+                const isSelected = selectedIds.has(item.id);
+                const tr = document.createElement('tr');
+                tr.className = `hover:bg-blue-50/50 transition ${isSelected ? 'bg-blue-50' : ''}`;
+                let actionButtonsHtml = `<div class="flex items-center justify-center gap-1.5">`;
+                if (currentUserRole === 'admin') {
+                    actionButtonsHtml += `
+                        <button onclick="editRow(${item.id})" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-semibold transition shadow-sm cursor-pointer" title="Edit"><i class="fa-solid fa-pen"></i> Edit</button>
+                        <button onclick="deleteRow(${item.id})" class="px-2.5 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg text-[11px] font-semibold transition shadow-sm cursor-pointer" title="Hapus"><i class="fa-solid fa-trash"></i> Hapus</button>`;
+                }
+                actionButtonsHtml += `</div>`;
+                const referenceUrl = getSafeUrl(item.rujukan);
+                const referenceHtml = referenceUrl
+                    ? `<a href="${escapeHtml(referenceUrl)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center w-8 h-8 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition shadow-sm cursor-pointer" title="Buka rujukan"><i class="fa-solid fa-eye"></i></a>`
+                    : `<span class="inline-flex items-center justify-center w-8 h-8 bg-slate-200 text-slate-400 rounded-lg" title="Rujukan belum tersedia"><i class="fa-solid fa-eye-slash"></i></span>`;
+                tr.innerHTML = `
+                    <td class="p-3 text-center admin-col ${currentUserRole !== 'admin' ? 'hidden' : ''}">
+                        <input type="checkbox" value="${item.id}" ${isSelected ? 'checked' : ''} onchange="toggleSelect(${item.id}, this)" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer">
+                    </td>
+                    <td class="p-3 font-semibold text-slate-900">${escapeHtml(item.namaVendor || '')}</td>
+                    <td class="p-3 text-slate-600 font-mono">${escapeHtml(formatNpwp(item.npwp || ''))}</td>
+                    <td class="p-3 font-bold text-emerald-600">${escapeHtml(item.tarifPajak || '')}</td>
+                    <td class="p-3 text-slate-700">${escapeHtml(item.jenisPajak || '')}</td>
+                    <td class="p-3 text-slate-700">${escapeHtml(item.jenisPekerjaan || '')}</td>
+                    <td class="p-3 text-center">${referenceHtml}</td>
+                    <td class="p-3 text-center">${actionButtonsHtml}</td>`;
+                tbody.appendChild(tr);
+            });
+            document.getElementById('paginationInfo').innerText = `Menampilkan ${startIndex + 1} - ${endIndex} dari ${dataArray.length} data`;
+            renderPaginationControls(dataArray.length);
+        }
+
+        function renderPaginationControls(totalItems) {
+            const totalPages = Math.ceil(totalItems / rowsPerPage) || 1;
+            const container = document.getElementById('paginationControls');
+            container.innerHTML = '';
+
+            const prevBtn = document.createElement('button');
+            prevBtn.innerHTML = `<i class="fa-solid fa-chevron-left"></i>`;
+            prevBtn.className = `w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center text-xs ${currentPage === 1 ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-100 cursor-pointer'}`;
+            prevBtn.onclick = () => { if(currentPage > 1) { currentPage--; renderTable(taxData); } };
+            container.appendChild(prevBtn);
+
+            for(let i=1; i<=totalPages; i++) {
+                const btn = document.createElement('button');
+                btn.innerText = i;
+                btn.className = `w-7 h-7 rounded-lg border text-xs font-semibold ${currentPage === i ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'border-slate-200 hover:bg-slate-100 text-slate-700 cursor-pointer'}`;
+                btn.onclick = () => { currentPage = i; renderTable(taxData); };
+                container.appendChild(btn);
+            }
+
+            const nextBtn = document.createElement('button');
+            nextBtn.innerHTML = `<i class="fa-solid fa-chevron-right"></i>`;
+            nextBtn.className = `w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center text-xs ${currentPage === totalPages ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-100 cursor-pointer'}`;
+            nextBtn.onclick = () => { if(currentPage < totalPages) { currentPage++; renderTable(taxData); } };
+            container.appendChild(nextBtn);
+        }
+
+        function changeRowsPerPage() {
+            rowsPerPage = parseInt(document.getElementById('rowsPerPage').value);
+            currentPage = 1;
+            renderTable(taxData);
+        }
+
+        function resetSearch() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('filterTarif').value = '';
+            filterDashboardTable();
+        }
+
+        // --- Form CRUD Operations ---
+        function handleFormSubmit(e) {
+            e.preventDefault();
+            const namaVendor = document.getElementById('inputNama').value.trim();
+            const npwp = getNpwpDigits(document.getElementById('inputNpwp').value);
+            const tarifValue = document.getElementById('inputTarif').value.trim();
+            const jenisPajak = document.getElementById('inputJenisPajak').value.trim();
+            const jenisPekerjaan = document.getElementById('inputPekerjaan').value.trim();
+            const rujukan = document.getElementById('inputRujukan').value.trim();
+
+            if (!/^[A-Za-z0-9À-ÿ ]+$/.test(namaVendor)) {
+                showToast('Validasi Gagal', 'Nama vendor hanya boleh berisi huruf, angka, dan spasi.', 'amber'); return;
+            }
+            if (!jenisPajak) {
+                showToast('Validasi Gagal', 'Jenis pajak wajib diisi.', 'amber'); return;
+            }
+            if (!/^\d{16}$/.test(npwp)) {
+                showToast('Validasi Gagal', 'NPWP harus terdiri dari tepat 16 angka. Contoh format: 000.000.000.0-000.000', 'amber'); return;
+            }
+            const tarifNumber = Number(tarifValue);
+            if (!Number.isFinite(tarifNumber) || tarifNumber < 0 || tarifNumber > 100) {
+                showToast('Validasi Gagal', 'Tarif pajak harus berupa angka antara 0 sampai 100 persen.', 'amber'); return;
+            }
+            const safeReference = getSafeUrl(rujukan);
+            if (!safeReference) {
+                showToast('Validasi Gagal', 'Rujukan harus berupa link URL yang valid, misalnya https://www.pajak.go.id/.', 'amber'); return;
+            }
+
+            const newItem = {
+                id: editingId ? editingId : Date.now(),
+                namaVendor, npwp, tarifPajak: `${tarifNumber}%`, jenisPajak, jenisPekerjaan, rujukan: safeReference
+            };
+            if (editingId) {
+                const index = taxData.findIndex(d => d.id === editingId);
+                if (index !== -1) taxData[index] = newItem;
+                showToast('Sukses', 'Data pajak berhasil diperbarui.');
+                editingId = null;
+            } else {
+                taxData.unshift(newItem);
+                showToast('Sukses', 'Data pajak baru berhasil disimpan.');
+            }
+            saveToStorage();
+            document.getElementById('taxForm').reset();
+            switchTab('dashboard');
+            updateDashboardMetrics();
+            renderDashboardTable(taxData);
+            renderTable(taxData);
+        }
+
+        function editRow(id) {
+            const item = taxData.find(d => d.id === id);
+            if(!item) return;
+            editingId = id;
+            document.getElementById('inputNama').value = item.namaVendor || '';
+            document.getElementById('inputNpwp').value = formatNpwp(item.npwp || '');
+            document.getElementById('inputTarif').value = String(item.tarifPajak || '').replace(',', '.').replace('%', '').trim();
+            document.getElementById('inputJenisPajak').value = item.jenisPajak || '';
+            document.getElementById('inputPekerjaan').value = item.jenisPekerjaan || '';
+            document.getElementById('inputRujukan').value = item.rujukan || '';
+            switchTab('form');
+        }
+
+        function deleteRow(id) {
+            taxData = taxData.filter(d => d.id !== id);
+            selectedIds.delete(id);
+            saveToStorage();
+            renderTable(taxData);
+            showToast('Terhapus', 'Data pajak berhasil dihapus.');
+        }
+
+        function toggleSelect(id, cb) {
+            if(cb.checked) selectedIds.add(id); else selectedIds.delete(id);
+        }
+
+        function toggleSelectAll(masterCb) {
+            const checkboxes = document.querySelectorAll('#tableBody input[type="checkbox"]');
+            checkboxes.forEach(cb => {
+                cb.checked = masterCb.checked;
+                const id = parseInt(cb.value);
+                if(masterCb.checked) selectedIds.add(id); else selectedIds.delete(id);
+            });
+        }
+
+        function deleteSelected() {
+            if(selectedIds.size === 0) {
+                showToast('Peringatan', 'Pilih setidaknya satu data yang ingin dihapus.', 'amber');
+                return;
+            }
+            taxData = taxData.filter(d => !selectedIds.has(d.id));
+            selectedIds.clear();
+            saveToStorage();
+            renderTable(taxData);
+            showToast('Terhapus', 'Data terpilih berhasil dihapus.');
+        }
+
+        // --- Modals & Utility ---
+        // Format NPWP: input hanya angka, tampilan otomatis menjadi 000.000.000.0-000.000
+        function formatNpwp(value) {
+            const digits = String(value || '').replace(/\D/g, '').slice(0, 16);
+            let result = '';
+            if (digits.length > 0) result += digits.slice(0, 3);
+            if (digits.length > 3) result += '.' + digits.slice(3, 6);
+            if (digits.length > 6) result += '.' + digits.slice(6, 9);
+            if (digits.length > 9) result += '.' + digits.slice(9, 10);
+            if (digits.length > 10) result += '-' + digits.slice(10, 13);
+            if (digits.length > 13) result += '.' + digits.slice(13, 16);
+            return result;
+        }
+
+        function getNpwpDigits(value) {
+            return String(value || '').replace(/\D/g, '').slice(0, 16);
+        }
+
+        function getSafeUrl(value) {
+            const raw = String(value || '').trim();
+            if (!raw) return '';
+            try {
+                const url = new URL(raw);
+                if (url.protocol === 'http:' || url.protocol === 'https:') return url.href;
+            } catch (e) {}
+            return '';
+        }
+
+        function openDetail(id) {
+            const item = taxData.find(d => d.id === id);
+            if(!item) return;
+            const referenceUrl = getSafeUrl(item.rujukan);
+            const referenceHtml = referenceUrl
+                ? `<a href="${escapeHtml(referenceUrl)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center w-9 h-9 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition shadow-sm" title="Buka rujukan"><i class="fa-solid fa-eye"></i></a>`
+                : `<span class="text-slate-400">Belum tersedia</span>`;
+            const content = `
+                <div class="grid grid-cols-2 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                    <div class="col-span-2"><span class="text-slate-400 block text-[10px] uppercase font-bold">Nama Vendor</span><strong class="text-slate-900">${escapeHtml(item.namaVendor || '')}</strong></div>
+                    <div><span class="text-slate-400 block text-[10px] uppercase font-bold">NPWP</span><span class="font-mono">${escapeHtml(formatNpwp(item.npwp || ''))}</span></div>
+                    <div><span class="text-slate-400 block text-[10px] uppercase font-bold">Tarif Pajak</span><strong class="text-emerald-600">${escapeHtml(item.tarifPajak || '')}</strong></div>
+                    <div><span class="text-slate-400 block text-[10px] uppercase font-bold">Jenis Pajak</span>${escapeHtml(item.jenisPajak || '')}</div>
+                    <div class="col-span-2"><span class="text-slate-400 block text-[10px] uppercase font-bold">Jenis Pekerjaan</span>${escapeHtml(item.jenisPekerjaan || '')}</div>
+                    <div class="col-span-2"><span class="text-slate-400 block text-[10px] uppercase font-bold mb-2">Rujukan</span>${referenceHtml}</div>
+                </div>`;
+            document.getElementById('detailContent').innerHTML = content;
+            document.getElementById('detailModal').classList.remove('hidden');
+        }
+
+        function closeDetailModal() {
+            document.getElementById('detailModal').classList.add('hidden');
+        }
+
+        function triggerImportModal() {
+            document.getElementById('importModal').classList.remove('hidden');
+        }
+
+        function closeImportModal() {
+            document.getElementById('importModal').classList.add('hidden');
+        }
+
+        let selectedImportFile = null;
+
+        function handleImportFileSelect(event) {
+            const file = event.target.files && event.target.files[0];
+            selectedImportFile = file || null;
+            const nameEl = document.getElementById('importFileName');
+            if (nameEl) {
+                nameEl.innerText = file ? file.name : 'Klik untuk pilih file';
+                nameEl.classList.toggle('text-emerald-600', !!file);
+            }
+        }
+
+        function normalizeImportKey(key) {
+            return String(key || '')
+                .toLowerCase()
+                .trim()
+                .replace(/[\s_\-./()]/g, '');
+        }
+
+        function getImportValue(row, aliases) {
+            const keys = Object.keys(row || {});
+            for (const alias of aliases) {
+                const normalizedAlias = normalizeImportKey(alias);
+                const foundKey = keys.find(k => normalizeImportKey(k) === normalizedAlias);
+                if (foundKey !== undefined && row[foundKey] !== undefined && row[foundKey] !== null) {
+                    return String(row[foundKey]).trim();
+                }
+            }
+            return '';
+        }
+
+        function convertImportedRow(row, index) {
+            const tarifRaw = getImportValue(row, ['Tarif Pajak', 'TarifPajak', 'Tarif']).replace(',', '.').replace('%', '').trim();
+            const tarifNumber = Number(tarifRaw);
+            return {
+                id: Date.now() + index + Math.floor(Math.random() * 1000),
+                namaVendor: getImportValue(row, ['Nama Vendor', 'NamaVendor', 'Vendor']),
+                npwp: getImportValue(row, ['NPWP', 'No NPWP', 'Nomor NPWP']).replace(/\D/g, ''),
+                tarifPajak: Number.isFinite(tarifNumber) ? `${tarifNumber}%` : '',
+                jenisPajak: getImportValue(row, ['Jenis Pajak', 'JenisPajak', 'Pajak']),
+                jenisPekerjaan: getImportValue(row, ['Jenis Pekerjaan', 'JenisPekerjaan', 'Pekerjaan']),
+                rujukan: getImportValue(row, ['Rujukan', 'Rujukan Hukum', 'Referensi'])
+            };
+        }
+
+        function resetImportFile() {
+            selectedImportFile = null;
+            const input = document.getElementById('importFile');
+            const nameEl = document.getElementById('importFileName');
+            if (input) input.value = '';
+            if (nameEl) {
+                nameEl.innerText = 'Klik untuk pilih file';
+                nameEl.classList.remove('text-emerald-600');
+            }
+        }
+
+        function closeImportModal() {
+            document.getElementById('importModal').classList.add('hidden');
+            resetImportFile();
+        }
+
+        function processImportFile() {
+            if (!selectedImportFile) {
+                showToast('Peringatan', 'Pilih file CSV atau Excel terlebih dahulu.', 'amber');
+                return;
+            }
+
+            if (typeof XLSX === 'undefined') {
+                showToast('Gagal', 'Library Excel belum termuat. Pastikan koneksi internet aktif lalu refresh halaman.', 'amber');
+                return;
+            }
+
+            const file = selectedImportFile;
+            const reader = new FileReader();
+
+            reader.onload = function(event) {
+                try {
+                    const data = new Uint8Array(event.target.result);
+                    const workbook = XLSX.read(data, { type: 'array', cellDates: false });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: '', raw: false });
+
+                    if (!rows.length) {
+                        showToast('Gagal', 'File tidak memiliki data yang dapat diimpor.', 'amber');
+                        return;
+                    }
+
+                    const importedRows = rows.map(convertImportedRow);
+                    const validRows = importedRows.filter(item =>
+                        item.namaVendor || item.npwp || item.tarifPajak ||
+                        item.jenisPajak || item.jenisPekerjaan || item.rujukan
+                    );
+
+                    if (!validRows.length) {
+                        showToast('Gagal', 'Kolom pada file tidak sesuai template pajak.', 'amber');
+                        return;
+                    }
+
+                    const startingId = Date.now();
+                    validRows.forEach((item, i) => {
+                        item.id = startingId + i;
+                    });
+
+                    // Data hasil import ditambahkan ke database yang sudah ada.
+                    taxData = [...validRows.reverse(), ...taxData];
+                    saveToStorage();
+                    currentPage = 1;
+                    updateDashboardMetrics();
+                    renderDashboardTable(taxData);
+                    renderTable(taxData);
+                    closeImportModal();
+                    showToast('Import Sukses', `${validRows.length} data berhasil diimpor dari ${file.name}.`);
+                } catch (error) {
+                    console.error('Import error:', error);
+                    showToast('Gagal Import', 'File tidak dapat dibaca. Pastikan format CSV/Excel dan header kolom sudah benar.', 'amber');
+                }
+            };
+
+            reader.onerror = function() {
+                showToast('Gagal Import', 'File tidak dapat dibaca oleh browser.', 'amber');
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
+
+        function exportExcel() {
+            let csv = 'Nama Vendor,NPWP,Tarif Pajak,Jenis Pajak,Jenis Pekerjaan,Rujukan\n';
+            taxData.forEach(item => {
+                csv += `"${item.namaVendor || ''}","${formatNpwp(item.npwp || '')}","${item.tarifPajak || ''}","${item.jenisPajak || ''}","${item.jenisPekerjaan || ''}","${item.rujukan || ''}"\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Pintar_Pajak_Nasmoco_${new Date().toISOString().slice(0,10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            showToast('Export Berhasil', 'File CSV/Excel berhasil diunduh.');
+        }
+
+        function openNotificationModal() {
+            showToast('Notifikasi', 'Tidak ada pemberitahuan pajak baru hari ini.');
+        }
+
+        function openSettingsModal() {
+            showToast('Pengaturan', 'Sistem berjalan normal pada penyimpanan sesi lokal.');
+        }
+
+        function showToast(title, message, type = 'emerald') {
+            const toast = document.getElementById('toast');
+            const toastTitle = document.getElementById('toastTitle');
+            const toastMessage = document.getElementById('toastMessage');
+            const toastIcon = document.getElementById('toastIcon');
+
+            toastTitle.innerText = title;
+            toastMessage.innerText = message;
+
+            if(type === 'amber') {
+                toastIcon.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-amber-400"></i>';
+            } else {
+                toastIcon.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-400"></i>';
+            }
+
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3500);
+        }
+
+        function escapeHtml(text) {
+            if(!text) return '';
+            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>
